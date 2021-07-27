@@ -1,0 +1,75 @@
+---
+- name: "Installation du server e-commerce"
+  hosts: servers
+  become: true
+  tasks:
+    - name:  "update apt"
+      apt:
+        update_cache: yes
+        state: latest
+        upgrade: yes
+
+    - name: apache tcheck
+      apt:
+        name: "apache2"
+        state: latest
+
+    - name: "\u001b[36m Installing php 7.4.16 \u001b[0m"
+      shell: |
+        sudo apt -y install lsb-release apt-transport-https ca-certificates
+        sudo wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+        echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/php.list
+
+    - name: "\u001b[36m Installing php 7.4.16 \u001b[0m"
+      apt:
+        name: php7.4, php7.4-common, php7.4-cli, php7.4-fpm, php7.4-json, php7.4-curl, php7.4-xml, libapache2-mod-php, php7.4-mbstring
+
+    - name: dl de symfony
+      get_url:
+        url: https://get.symfony.com/cli/installer
+        dest: /home/installer
+      
+    - name: install de symfony
+      shell: |
+        bash /home/installer
+        mv /root/.symfony/bin/symfony /usr/local/bin/symfony
+        
+    - name: "install Maria DB"
+      apt:
+        name: mariadb-server
+    
+    - name: téléchager composer
+      get_url:
+        url: https://getcomposer.org/installer
+        dest: /tmp/installer
+      tags: composer
+    - name: installer composer
+      shell: cat /tmp/installer | php -- --install-dir=/usr/local/bin
+      args:
+        creates: /usr/local/bin/composer
+      tags: composer
+    - name: renommer composer.phar en composer
+      shell: mv /usr/local/bin/composer.phar /usr/local/bin/composer
+      args:
+        creates: /usr/local/bin/composer
+      tags: composer
+    - name: rendre composer exécutable
+      file: 
+        path: /usr/local/bin/composer
+        mode: a+x
+        state: file
+      tags: composer
+
+    - name: "\u001b[36m Copying project files and adding permission \u001b[0m"
+      ansible.builtin.copy:
+        src: ./
+        dest: /home/e-commerce-timflo/
+        owner: tim
+        mode: '0644'
+
+    - name: exécute api
+      ansible.builtin.shell:
+        cmd: |
+          composer install -n
+          symfony serve -d --no-tls
+        chdir: /home/e-commerce-timflo
